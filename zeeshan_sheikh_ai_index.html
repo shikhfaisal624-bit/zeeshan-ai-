@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b16">
+<title>Zeeshan Sheikh AI</title>
+<style>
+:root{color-scheme:dark;--bg:#070b16;--panel:#111a2c;--line:#26344d;--text:#eef4ff;--muted:#9aabc5;--accent:#67e8f9}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top,#14223b,var(--bg) 48%);color:var(--text);font-family:system-ui,sans-serif;min-height:100vh}
+header{padding:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #24314a;position:sticky;top:0;background:#080e1bea;z-index:2}
+h1{font-size:18px;margin:0}small,.muted,.hint{color:var(--muted)}
+button,input,select,textarea{font:inherit}
+button{border:1px solid var(--line);background:#1a2942;color:var(--text);border-radius:13px;padding:11px 14px}
+button.primary{background:linear-gradient(120deg,#0e7490,#2563eb);border:0;font-weight:700}
+button:disabled{opacity:.5}
+main{max-width:850px;margin:auto;padding:14px;display:flex;flex-direction:column;min-height:calc(100dvh - 65px)}
+#status{font-size:12px;color:var(--muted);padding:7px 2px}
+#chat{flex:1;display:flex;flex-direction:column;gap:12px;padding:10px 0 18px}
+.msg{max-width:90%;padding:12px 14px;border-radius:17px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.user{align-self:flex-end;background:#164e63;border-bottom-right-radius:5px}
+.bot{align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:5px}
+.composer{position:sticky;bottom:0;background:#080e1b;padding:12px 0 calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+textarea{width:100%;min-height:54px;max-height:150px;resize:vertical;background:#101a2b;color:var(--text);border:1px solid var(--line);border-radius:14px;padding:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}.actions button{flex:1}
+.panel{background:#0d1627;border:1px solid var(--line);border-radius:16px;padding:14px;margin:12px 0}
+.panel label{display:block;font-size:13px;color:var(--muted);margin:10px 0 5px}
+.panel input,.panel select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:#111d31;color:var(--text)}
+#settings{display:none}.hint{font-size:12px;line-height:1.45}
+</style>
+</head>
+<body>
+<header><div><h1>✨ Zeeshan Sheikh AI 🔖</h1><small>Hindi • English • Hinglish</small></div><button id="settingsBtn">⚙️ Settings</button></header>
+<main>
+<div id="status">Ready • Internet AI needs a working API key and available free quota</div>
+<section id="settings" class="panel">
+<strong>AI Settings</strong>
+<label for="apiKey">Gemini API key</label>
+<input id="apiKey" type="password" autocomplete="off" placeholder="Paste your API key">
+<label for="model">Gemini model</label>
+<select id="model"><option value="gemini-2.5-flash">Gemini 2.5 Flash</option></select>
+<label for="speechLang">Voice input language</label>
+<select id="speechLang"><option value="hi-IN">Hindi / Hinglish</option><option value="en-IN">English (India)</option><option value="en-US">English (US)</option></select>
+<div class="actions"><button class="primary" id="saveSettings">Save settings</button><button id="closeSettings">Close</button></div>
+<p class="hint">API key isi browser mein save hoti hai aur Google ko request ke saath bheji jaati hai. Is file ya public GitHub code mein API key mat likhna. Free quota khatam hone par online AI tab tak reply nahi karega jab tak quota reset na ho.</p>
+</section>
+<div id="chat"><div class="msg bot">Assalamualaikum! Main Zeeshan Sheikh AI hoon. 😊 Hindi, English ya Hinglish mein baat karo.</div></div>
+<div class="composer">
+<textarea id="prompt" placeholder="Yahan message likho..." rows="2"></textarea>
+<div class="actions"><button class="primary" id="send">Send ➤</button><button id="mic">🎙️ Speak</button><button id="stop">■ Stop</button></div>
+<p class="hint">Mic support Chrome aur phone ki speech service par depend karta hai.</p>
+</div>
+</main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const chat=$('chat'),status=$('status'),promptBox=$('prompt');
+let history=[],recognition=null;
+const systemText="You are Zeeshan Sheikh AI, a helpful and friendly personal assistant. Reply in the same language as the user. Use natural Hindi or Hinglish when appropriate. Be clear, respectful and concise.";
+function addMessage(text,who){const el=document.createElement('div');el.className='msg '+who;el.textContent=text;chat.appendChild(el);el.scrollIntoView({block:'end',behavior:'smooth'});return el}
+function offlineReply(text){
+ const t=text.toLowerCase().trim();
+ if(/^(hi|hii|hello|hey|salam|assalamualaikum|السلام علیکم)/i.test(t))return "Wa alaikum assalam! 😊 Main Zeeshan Sheikh AI hoon. Aap kaise hain?";
+ if(/tumhara naam|your name|naam kya/i.test(t))return "Mera naam Zeeshan Sheikh AI hai. 😊";
+ if(/kaise ho|how are you/i.test(t))return "Main theek hoon! Aapki madad ke liye ready hoon. 😊";
+ if(/time|samay|kitne baje/i.test(t))return "Aapke phone ka time: "+new Date().toLocaleTimeString('hi-IN');
+ if(/date|tarikh|aaj kya din/i.test(t))return "Aaj ki tareekh: "+new Date().toLocaleDateString('hi-IN',{dateStyle:'full'});
+ if(/thank|shukriya|धन्यवाद/i.test(t))return "Aapka swagat hai! 😊";
+ if(/help|madad|kya kar/i.test(t))return "Main basic offline jawab de sakta hoon. General sawalon ke liye Settings mein valid Gemini API key save karke internet on rakhein.";
+ return "Abhi internet AI available nahi hai, isliye main iska sahi jawab offline nahi de sakta. Internet aur Gemini API key check karein; free quota khatam ho to reset ka intezar karna hoga.";
+}
+function speak(text){
+ if(!('speechSynthesis'in window))return;
+ speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(text);
+ u.lang=/[\u0900-\u097F]/.test(text)?'hi-IN':'en-IN';
+ u.rate=.96;speechSynthesis.speak(u);
+}
+async function askAI(text){
+ const key=localStorage.getItem('zss_gemini_key')||'';
+ const model=localStorage.getItem('zss_model')||'gemini-2.5-flash';
+ if(!key) return offlineReply(text)+"\n\nSettings ⚙️ mein apni Gemini API key add kar sakte hain.";
+ const url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent?key='+encodeURIComponent(key);
+ const contents=history.concat([{role:'user',parts:[{text}]}]);
+ const payload={systemInstruction:{parts:[{text:systemText}]},contents,generationConfig:{temperature:.7,maxOutputTokens:900}};
+ let response;
+ try{
+  response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ }catch(e){return "Internet connection nahi mil raha. Internet check karke dobara try karein.\n\n"+offlineReply(text);}
+ let data={};try{data=await response.json()}catch(e){}
+ if(!response.ok){
+  const msg=data.error?.message||'Request failed';
+  if(response.status===429)return "Gemini ka free quota/rate limit abhi khatam hai. Main billing on nahi karunga. Quota reset hone par dobara try karein. Basic offline mode available hai.\n\n"+offlineReply(text);
+  if(response.status===400||response.status===404)return "Gemini request/model mein problem hai. Settings mein API key check karein. Technical detail: "+msg;
+  if(response.status===401||response.status===403)return "API key reject hui hai ya API access enabled nahi hai. Apni key Google AI Studio se check karein. Key kisi ko share mat karein.";
+  return "Gemini se abhi jawab nahi mila (HTTP "+response.status+"). Thodi der baad try karein.";
+ }
+ const reply=data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('').trim();
+ if(!reply)return "Gemini ne khaali jawab diya. Dobara try karein.";
+ history.push({role:'user',parts:[{text}]},{role:'model',parts:[{text:reply}]});
+ if(history.length>20)history=history.slice(-20);
+ return reply;
+}
+async function sendText(text){
+ text=text.trim();if(!text)return;
+ addMessage(text,'user');promptBox.value='';
+ const loading=addMessage('Soch raha hoon…','bot');
+ $('send').disabled=true;status.textContent='Reply aa raha hai…';
+ try{const reply=await askAI(text);loading.textContent=reply;speak(reply);status.textContent='Ready';}
+ catch(e){loading.textContent='Error: '+e.message;status.textContent='Request failed';}
+ finally{$('send').disabled=false;}
+}
+$('send').onclick=()=>sendText(promptBox.value);
+promptBox.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendText(promptBox.value)}});
+$('settingsBtn').onclick=()=>{
+ $('settings').style.display=$('settings').style.display==='block'?'none':'block';
+ $('apiKey').value=localStorage.getItem('zss_gemini_key')||'';
+ $('model').value=localStorage.getItem('zss_model')||'gemini-2.5-flash';
+ $('speechLang').value=localStorage.getItem('zss_speech_lang')||'hi-IN';
+};
+$('closeSettings').onclick=()=>$('settings').style.display='none';
+$('saveSettings').onclick=()=>{
+ const key=$('apiKey').value.trim();
+ if(key)localStorage.setItem('zss_gemini_key',key);
+ localStorage.setItem('zss_model',$('model').value);
+ localStorage.setItem('zss_speech_lang',$('speechLang').value);
+ status.textContent='Settings saved';$('settings').style.display='none';
+};
+$('mic').onclick=()=>{
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){status.textContent='Is Chrome version mein speech recognition support nahi hai.';return;}
+ if(recognition){try{recognition.stop()}catch(e){}}
+ recognition=new SR();
+ recognition.lang=localStorage.getItem('zss_speech_lang')||'hi-IN';
+ recognition.interimResults=false;recognition.maxAlternatives=1;
+ recognition.onstart=()=>status.textContent='Sun raha hoon…';
+ recognition.onresult=e=>{const said=e.results[0][0].transcript;promptBox.value=said;sendText(said)};
+ recognition.onerror=e=>status.textContent='Mic error: '+e.error;
+ recognition.onend=()=>{if(status.textContent==='Sun raha hoon…')status.textContent='Ready'};
+ try{recognition.start()}catch(e){status.textContent='Mic start nahi hua. Dobara tap karein.'}
+};
+$('stop').onclick=()=>{if(recognition){try{recognition.stop()}catch(e){}}if('speechSynthesis'in window)speechSynthesis.cancel();status.textContent='Stopped';};
+})();
+</script>
+</body>
+</html>
