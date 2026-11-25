@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b16">
+<title>Zeeshan Sheikh AI 🔖</title>
+<style>
+:root{color-scheme:dark;--bg:#070b16;--panel:#111a2c;--line:#26344d;--text:#eef4ff;--muted:#9aabc5;--accent:#67e8f9}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top,#14223b,var(--bg) 48%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+header{padding:18px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #24314a;position:sticky;top:0;background:#080e1bea;backdrop-filter:blur(12px);z-index:2}
+h1{font-size:18px;margin:0}small,.muted{color:var(--muted)}button,select,input,textarea{font:inherit}
+button{border:1px solid var(--line);background:#1a2942;color:var(--text);border-radius:13px;padding:11px 14px;cursor:pointer}
+button.primary{background:linear-gradient(120deg,#0e7490,#2563eb);border:0;font-weight:700}
+button:disabled{opacity:.55;cursor:not-allowed}
+main{max-width:850px;margin:auto;padding:16px;display:flex;flex-direction:column;min-height:calc(100vh - 65px)}
+#status{font-size:12px;color:var(--muted);padding:6px 2px}
+#chat{flex:1;display:flex;flex-direction:column;gap:12px;padding:10px 0 18px}
+.msg{max-width:88%;padding:12px 14px;border-radius:17px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.user{align-self:flex-end;background:#164e63;border-bottom-right-radius:5px}
+.bot{align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:5px}
+.composer{position:sticky;bottom:0;background:#080e1b;padding:12px 0 calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+textarea{width:100%;resize:vertical;min-height:52px;max-height:150px;background:#101a2b;color:var(--text);border:1px solid var(--line);border-radius:14px;padding:13px;outline:none}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}.actions button{flex:1}
+.panel{background:#0d1627;border:1px solid var(--line);border-radius:16px;padding:14px;margin:12px 0}
+.panel label{display:block;font-size:13px;color:var(--muted);margin:10px 0 5px}
+.panel input,.panel select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:#111d31;color:var(--text)}
+#settings{display:none}.hint{font-size:12px;color:var(--muted);line-height:1.45}
+</style>
+</head>
+<body>
+<header><div><h1>✨ Zeeshan Sheikh AI 🔖</h1><small>Hindi • English • Hinglish</small></div><button id="settingsBtn" aria-label="Settings">⚙️ Settings</button></header>
+<main>
+<div id="status">Ready • Mic works while this page is open</div>
+<section id="settings" class="panel">
+<strong>AI Settings</strong>
+<label for="apiKey">Gemini API key</label><input id="apiKey" type="password" autocomplete="off" placeholder="Paste your API key here">
+<label for="model">Gemini model</label><select id="model"><option value="gemini-3.8-flash">Gemini 3.8 Flash</option><option value="gemini-2.5-flash">Gemini 2.5 Flash</option></select>
+<label for="speechLang">Voice input language</label><select id="speechLang"><option value="auto">Auto (Hindi/Hinglish default)</option><option value="hi-IN">Hindi / Hinglish</option><option value="en-IN">English (India)</option><option value="en-US">English (US)</option></select>
+<label for="voiceSelect">Speaking voice</label><select id="voiceSelect"><option value="auto">Automatic by reply language</option></select>
+<div class="actions"><button class="primary" id="saveSettings">Save settings</button><button id="closeSettings">Close</button></div>
+<p class="hint">Your key is stored in this browser and is sent to Google when you use Gemini. Do not share this HTML file publicly with a key saved in it. Voice availability depends on your phone.</p>
+</section>
+<div id="chat"><div class="msg bot">Assalamualaikum! Main Zeeshan Sheikh AI hoon. Hindi, English ya Hinglish mein baat kar sakte ho. 😊</div></div>
+<div class="composer">
+<textarea id="prompt" placeholder="Yahan message likho..." rows="2"></textarea>
+<div class="actions"><button class="primary" id="send">Send ➤</button><button id="mic">🎙️ Speak</button><button id="wake">▶ Hey Zeeshan</button><button id="stop">■ Stop</button></div>
+<p class="hint">Wake phrase sirf tab kaam karega jab yeh page Chrome mein khula aur foreground mein ho.</p>
+</div>
+</main>
+<script>
+(() => {
+const $=id=>document.getElementById(id), chat=$('chat'), status=$('status'), promptBox=$('prompt');
+let voices=[], recognition=null, wakeMode=false, listening=false, speaking=false, conversation=[];
+const SpeechRecognitionAPI=window.SpeechRecognition||window.webkitSpeechRecognition;
+const systemInstruction="You are Zeeshan Sheikh AI, a friendly and helpful personal assistant. Reply in the same language the user uses: Hindi in Hindi, English in English, and Hinglish in natural Hinglish. If the user mixes languages, mirror that naturally. Be clear, respectful, concise, and conversational.";
+function addMessage(text,who){const el=document.createElement('div');el.className='msg '+who;el.textContent=text;chat.appendChild(el);chat.scrollTop=chat.scrollHeight;return el}
+function detectLanguage(text){return /[\u0900-\u097F]/.test(text)?'hi':(/[a-zA-Z]/.test(text)?'en':'hi')}
+function loadVoices(){voices=speechSynthesis.getVoices();const sel=$('voiceSelect'),old=sel.value;sel.innerHTML='<option value="auto">Automatic by reply language</option>';voices.forEach((v,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=v.name+' ('+v.lang+')';sel.appendChild(o)});if([...sel.options].some(o=>o.value===old))sel.value=old}
+if('speechSynthesis'in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices}
+function chooseVoice(lang){const chosen=$('voiceSelect').value;if(chosen!=='auto')return voices[Number(chosen)]||null;const prefix=lang==='hi'?'hi':'en';let list=voices.filter(v=>v.lang.toLowerCase().startsWith(prefix));if(!list.length&&lang==='hi')list=voices.filter(v=>v.lang.toLowerCase().startsWith('en-in'));return list[0]||voices[0]||null}
+function resumeWakeAfterSpeech(){if(wakeMode&&!listening)setTimeout(()=>{if(wakeMode&&!speaking)startRecognition(true)},600)}
+function speak(text){if(!('speechSynthesis'in window))return;speechSynthesis.cancel();const lang=detectLanguage(text),utter=new SpeechSynthesisUtterance(text),voice=chooseVoice(lang);if(voice){utter.voice=voice;utter.lang=voice.lang}else utter.lang=lang==='hi'?'hi-IN':'en-IN';utter.rate=.96;utter.pitch=.88;utter.onstart=()=>{speaking=true;if(wakeMode&&recognition){try{recognition.stop()}catch(e){}}};utter.onend=()=>{speaking=false;resumeWakeAfterSpeech()};utter.onerror=()=>{speaking=false;resumeWakeAfterSpeech()};speechSynthesis.speak(utter)}
+async function askAI(text){
+const key=localStorage.getItem('zss_gemini_key')||'',model=localStorage.getItem('zss_model')||'gemini-3.8-flash';
+if(!key)return "Gemini API key set nahi hai. ⚙️ Settings mein apni key add karo.";
+const url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent?key='+encodeURIComponent(key);
+const contents=conversation.concat([{role:'user',parts:[{text}]}]);
+const body=JSON.stringify({systemInstruction:{parts:[{text:systemInstruction}]},contents,generationConfig:{temperature:.7,maxOutputTokens:900}});
+let lastError;
+for(let attempt=0;attempt<4;attempt++){
+try{
+const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body});
+const data=await response.json();
+if(response.ok){const reply=data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('');if(!reply)throw new Error('Gemini ne text reply nahi diya. Dobara try karo.');conversation.push({role:'user',parts:[{text}]},{role:'model',parts:[{text:reply}]});if(conversation.length>20)conversation=conversation.slice(-20);return reply}
+const message=data.error?.message||'Gemini request failed';
+if(![429,500,502,503,504].includes(response.status))throw new Error(message);
+lastError=new Error(message);
+}catch(e){if(e.name==='TypeError'||!e.message)lastError=e;else if(e.message&&!/high demand|temporarily|unavailable|overloaded|quota|rate/i.test(e.message))throw e;else lastError=e}
+if(attempt<3){status.textContent='Server busy — retry '+(attempt+1)+'/3…';await new Promise(resolve=>setTimeout(resolve,1500*Math.pow(2,attempt)))}
+}
+throw new Error('Gemini abhi busy hai. Kuch der baad dobara try karo. Details: '+(lastError?.message||'Temporary server issue'));
+}
+async function sendText(text){
+text=text.trim();if(!text)return;
+addMessage(text,'user');promptBox.value='';const loading=addMessage('Soch raha hoon…','bot');$('send').disabled=true;status.textContent='AI is replying…';
+try{const reply=await askAI(text);loading.textContent=reply;speak(reply)}
+catch(e){loading.textContent='Error: '+e.message;status.textContent='Request failed'}
+finally{$('send').disabled=false;if(status.textContent!=='Request failed')status.textContent='Ready'}
+}
+$('send').onclick=()=>sendText(promptBox.value);
+promptBox.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendText(promptBox.value)}});
+$('settingsBtn').onclick=()=>{$('settings').style.display=$('settings').style.display==='block'?'none':'block';$('apiKey').value=localStorage.getItem('zss_gemini_key')||'';$('model').value=localStorage.getItem('zss_model')||'gemini-3.8-flash';$('speechLang').value=localStorage.getItem('zss_speech_lang')||'auto'};
+$('closeSettings').onclick=()=>$('settings').style.display='none';
+$('saveSettings').onclick=()=>{if($('apiKey').value.trim())localStorage.setItem('zss_gemini_key',$('apiKey').value.trim());localStorage.setItem('zss_model',$('model').value);localStorage.setItem('zss_speech_lang',$('speechLang').value);status.textContent='Settings saved';$('settings').style.display='none'};
+function stopListening(){wakeMode=false;listening=false;if(recognition){try{recognition.stop()}catch(e){}}$('wake').textContent='▶ Hey Zeeshan';status.textContent='Ready'}
+function startRecognition(wake=false){
+if(!SpeechRecognitionAPI){status.textContent='Speech recognition is not supported in this browser';return}
+if(speaking){status.textContent='Assistant bol raha hai — thodi der baad try karo';return}
+if(listening){try{recognition.stop()}catch(e){}}
+wakeMode=wake;recognition=new SpeechRecognitionAPI();const selected=localStorage.getItem('zss_speech_lang')||'auto';
+recognition.lang=selected==='auto'?'hi-IN':selected;recognition.interimResults=false;recognition.maxAlternatives=1;recognition.continuous=wake;
+recognition.onstart=()=>{listening=true;status.textContent=wake?'Listening for “Hey Zeeshan”…':'Listening…';$('wake').textContent=wake?'■ Stop wake':'▶ Hey Zeeshan'};
+recognition.onresult=e=>{const transcript=e.results[e.results.length-1][0].transcript.trim();if(wake){if(/hey\s*zeeshan|zeeshan/i.test(transcript)){status.textContent='Wake phrase detected';wakeMode=false;try{recognition.stop()}catch(err){};setTimeout(()=>startRecognition(false),350)}else status.textContent='Waiting for “Hey Zeeshan”…'}else{promptBox.value=transcript;sendText(transcript)}};
+recognition.onerror=e=>{status.textContent='Mic: '+e.error};
+recognition.onend=()=>{listening=false;if(wakeMode&&!speaking){setTimeout(()=>{if(wakeMode&&!speaking)startRecognition(true)},700)}else if(!wakeMode){$('wake').textContent='▶ Hey Zeeshan';if(status.textContent==='Listening…')status.textContent='Ready'}};
+try{recognition.start()}catch(e){status.textContent='Mic could not start. Try again.'}
+}
+$('mic').onclick=()=>startRecognition(false);$('wake').onclick=()=>{if(wakeMode)stopListening();else startRecognition(true)};
+$('stop').onclick=()=>{stopListening();if('speechSynthesis'in window)speechSynthesis.cancel();speaking=false;status.textContent='Stopped'};
+})();
+</script>
+</body>
+</html>
